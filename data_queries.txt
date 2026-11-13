@@ -1,0 +1,64 @@
+// Sample data Inserted
+INSERT INTO members (name, email, phone) VALUES
+('Dinesh Kumar', 'dinesh@mail.com', '9876543210'),
+('Vinoth Kumar', 'vinoth@mail.com', '9123456780');
+
+INSERT INTO books (isbn, title, author, publisher, published_year, category) VALUES
+('9780132350884', 'Clean Code', 'Robert C. Martin', 'Prentice Hall', 2008, 'Programming'),
+('9780201616224', 'The Pragmatic Programmer', 'Andrew Hunt', 'Addison-Wesley', 1999, 'Programming');
+
+INSERT INTO book_copies (book_id, shelf, status) VALUES
+(1, 'A1-01', 'available'),
+(1, 'A1-02', 'available'),
+(2, 'B2-04', 'available');
+
+// Loan Transaction
+
+START TRANSACTION;
+
+SELECT status INTO @copy_status 
+FROM book_copies 
+WHERE copy_id = 1 FOR UPDATE;
+
+INSERT INTO transactions (member_id, copy_id, issue_date, due_date, status)
+SELECT 1, 1, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY), 'issued'
+WHERE @copy_status = 'available';
+
+UPDATE book_copies 
+SET status = 'issued' 
+WHERE copy_id = 1 AND @copy_status = 'available';
+
+COMMIT;
+
+// Return Transaction
+
+START TRANSACTION;
+
+UPDATE transactions
+SET 
+    return_date = CURRENT_DATE,
+    fine_amount = IF(CURRENT_DATE > due_date, DATEDIFF(CURRENT_DATE, due_date) * 5.00, 0.00),
+    status = 'returned'
+WHERE trans_id = 1 AND return_date IS NULL;
+
+UPDATE book_copies bc
+JOIN transactions t ON bc.copy_id = t.copy_id
+SET bc.status = 'available'
+WHERE t.trans_id = 1;
+
+COMMIT;
+
+// View History
+SELECT 
+    b.title,
+    b.isbn,
+    t.issue_date,
+    t.due_date,
+    t.return_date,
+    t.fine_amount,
+    t.status
+FROM transactions t
+JOIN book_copies bc ON t.copy_id = bc.copy_id
+JOIN books b ON bc.book_id = b.book_id
+WHERE t.member_id = 1
+ORDER BY t.issue_date DESC;
